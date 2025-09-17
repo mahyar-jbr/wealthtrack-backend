@@ -1,0 +1,60 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  password_hash String
+  first_name   String?
+  last_name    String?
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+  
+  // Relations
+  assets       Asset[]
+  
+  @@map("users")
+}
+
+model Asset {
+  id             String   @id @default(cuid())
+  user_id        String
+  type           AssetType
+  symbol         String
+  name           String
+  quantity       Decimal  @db.Decimal(18, 8)
+  purchase_price Decimal  @db.Decimal(18, 2)
+  purchase_date  DateTime @default(now())
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+  
+  // Relations
+  user           User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  
+  @@map("assets")
+}
+
+model PriceCache {
+  symbol       String   @id
+  current_price Decimal @db.Decimal(18, 2)
+  updated_at   DateTime @updatedAt
+  
+  @@map("price_cache")
+}
+
+enum AssetType {
+  STOCK
+  CRYPTO
+  ETF
+  BOND
+  OTHER
+}
