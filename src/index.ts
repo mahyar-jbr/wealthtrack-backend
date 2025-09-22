@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import authRoutes from './routes/auth';
 import userRoutes from './routes/users';
+import assetRoutes from './routes/assets'; 
 
 // Load environment variables
 dotenv.config();
@@ -37,6 +38,7 @@ app.get('/health', (req, res) => {
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/assets', assetRoutes);  // ← ADD THIS LINE
 
 // 404 handler
 app.use((req, res) => {
@@ -56,4 +58,5 @@ app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📊 Health check: http://localhost:${PORT}/health`);
   console.log(`🔐 Auth endpoints: http://localhost:${PORT}/api/auth/*`);
+  console.log(`💰 Asset endpoints: http://localhost:${PORT}/api/assets/*`);  // ← ADD THIS LINE (optional but helpful)
 });
