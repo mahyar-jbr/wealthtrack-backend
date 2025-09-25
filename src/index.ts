@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import authRoutes from './routes/auth';
 import userRoutes from './routes/users';
 import assetRoutes from './routes/assets'; 
+import priceRoutes from './routes/prices';
 
 // Load environment variables
 dotenv.config();
@@ -38,7 +39,8 @@ app.get('/health', (req, res) => {
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
-app.use('/api/assets', assetRoutes);  // ← ADD THIS LINE
+app.use('/api/assets', assetRoutes);
+app.use('/api/prices', priceRoutes);
 
 // 404 handler
 app.use((req, res) => {
