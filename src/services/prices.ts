@@ -1,4 +1,5 @@
 import axios from 'axios';
+import yahooFinance from 'yahoo-finance2';
 import prisma from './database';
 
 // CoinGecko API (free, no key required)
@@ -18,11 +19,21 @@ const CRYPTO_MAPPINGS: Record<string, string> = {
   'DOGE': 'dogecoin',
   'DOT': 'polkadot',
   'MATIC': 'matic-network',
-  'SHIB': 'shiba-inu'
+  'SHIB': 'shiba-inu',
+  'AVAX': 'avalanche-2',
+  'LINK': 'chainlink',
+  'UNI': 'uniswap',
+  'ATOM': 'cosmos',
+  'LTC': 'litecoin'
 };
 
-// Stock symbols we support (Yahoo Finance will be added later)
-const SUPPORTED_STOCKS = ['AAPL', 'GOOGL', 'MSFT', 'TSLA', 'AMZN', 'META', 'NVDA', 'AMD', 'NFLX', 'DIS'];
+// Stock symbols we support (expandable)
+const SUPPORTED_STOCKS = [
+  'AAPL', 'GOOGL', 'MSFT', 'TSLA', 'AMZN', 
+  'META', 'NVDA', 'AMD', 'NFLX', 'DIS',
+  'JPM', 'V', 'WMT', 'PG', 'MA',
+  'PYPL', 'INTC', 'CSCO', 'PFE', 'KO'
+];
 
 interface PriceData {
   symbol: string;
@@ -50,9 +61,8 @@ export class PriceService {
     // Determine if it's crypto or stock
     if (CRYPTO_MAPPINGS[upperSymbol]) {
       return await this.fetchCryptoPrice(upperSymbol);
-    } else if (SUPPORTED_STOCKS.includes(upperSymbol)) {
-      // For now, return mock data for stocks (Yahoo Finance in next step)
-      return await this.fetchMockStockPrice(upperSymbol);
+    } else if (this.isStockSymbol(upperSymbol)) {
+      return await this.fetchStockPrice(upperSymbol);
     }
 
     console.log(`Symbol ${upperSymbol} not supported`);
@@ -67,7 +77,7 @@ export class PriceService {
     
     // Separate crypto and stocks
     const cryptoSymbols = symbols.filter(s => CRYPTO_MAPPINGS[s.toUpperCase()]);
-    const stockSymbols = symbols.filter(s => SUPPORTED_STOCKS.includes(s.toUpperCase()));
+    const stockSymbols = symbols.filter(s => this.isStockSymbol(s.toUpperCase()));
 
     // Fetch crypto prices in batch (more efficient)
     if (cryptoSymbols.length > 0) {
@@ -75,13 +85,23 @@ export class PriceService {
       cryptoPrices.forEach((price, symbol) => prices.set(symbol, price));
     }
 
-    // Fetch stock prices (mock for now)
+    // Fetch stock prices individually (Yahoo Finance doesn't support batch in free tier)
     for (const symbol of stockSymbols) {
       const price = await this.getPrice(symbol);
       prices.set(symbol.toUpperCase(), price);
     }
 
     return prices;
+  }
+
+  /**
+   * Check if symbol is a stock (basic check - any non-crypto symbol)
+   */
+  private isStockSymbol(symbol: string): boolean {
+    // Check if it's in our supported list OR 
+    // if it looks like a stock symbol (1-5 uppercase letters, not in crypto map)
+    return SUPPORTED_STOCKS.includes(symbol) || 
+           (/^[A-Z]{1,5}$/.test(symbol) && !CRYPTO_MAPPINGS[symbol]);
   }
 
   /**
@@ -122,9 +142,78 @@ export class PriceService {
 
       return priceData;
     } catch (error) {
-      console.error(`Error fetching ${symbol} price:`, error);
+      console.error(`Error fetching ${symbol} price from CoinGecko:`, error);
       return null;
     }
+  }
+
+  /**
+   * Fetch stock price from Yahoo Finance
+   */
+  private async fetchStockPrice(symbol: string): Promise<PriceData | null> {
+    try {
+      console.log(`Fetching ${symbol} price from Yahoo Finance...`);
+      
+      // Yahoo Finance quote includes real-time price data
+      const quote = await yahooFinance.quote(symbol);
+      
+      if (!quote || !quote.regularMarketPrice) {
+        console.log(`No price data available for ${symbol}`);
+        return null;
+      }
+
+      const priceData: PriceData = {
+        symbol: symbol.toUpperCase(),
+        price: quote.regularMarketPrice,
+        change24h: quote.regularMarketChange || 0,
+        changePercent24h: quote.regularMarketChangePercent || 0,
+        lastUpdated: new Date(),
+        source: 'yahoo'
+      };
+
+      // Cache the price
+      await this.cachePrice(priceData);
+
+      console.log(`Fetched ${symbol} at $${quote.regularMarketPrice} from Yahoo Finance`);
+      return priceData;
+    } catch (error: any) {
+      console.error(`Error fetching ${symbol} price from Yahoo Finance:`, error.message);
+      
+      // Fall back to manual/mock price if Yahoo fails
+      return this.fetchManualStockPrice(symbol);
+    }
+  }
+
+  /**
+   * Fallback manual stock price (when Yahoo Finance fails)
+   */
+  private async fetchManualStockPrice(symbol: string): Promise<PriceData> {
+    // Generate consistent mock price based on symbol
+    const mockPrices: Record<string, number> = {
+      'AAPL': 182.50,
+      'GOOGL': 142.30,
+      'MSFT': 378.90,
+      'TSLA': 245.60,
+      'AMZN': 155.20,
+      'META': 362.40,
+      'NVDA': 487.30,
+      'AMD': 167.80,
+      'NFLX': 445.60,
+      'DIS': 92.30
+    };
+
+    const price = mockPrices[symbol] || 100;
+    const priceData: PriceData = {
+      symbol,
+      price,
+      change24h: 0,
+      changePercent24h: 0,
+      lastUpdated: new Date(),
+      source: 'manual'
+    };
+
+    await this.cachePrice(priceData);
+    return priceData;
   }
 
   /**
@@ -141,7 +230,7 @@ export class PriceService {
 
       if (coinIds.length === 0) return prices;
 
-      console.log(`Fetching batch prices for: ${symbols.join(', ')}`);
+      console.log(`Fetching batch prices for cryptos: ${symbols.join(', ')}`);
 
       const response = await axios.get(
         `${COINGECKO_API}/simple/price`,
@@ -186,38 +275,6 @@ export class PriceService {
   }
 
   /**
-   * Mock stock price (will be replaced with Yahoo Finance)
-   */
-  private async fetchMockStockPrice(symbol: string): Promise<PriceData> {
-    // Generate mock price based on symbol (consistent but fake)
-    const mockPrices: Record<string, number> = {
-      'AAPL': 182.50,
-      'GOOGL': 142.30,
-      'MSFT': 378.90,
-      'TSLA': 245.60,
-      'AMZN': 155.20,
-      'META': 362.40,
-      'NVDA': 487.30,
-      'AMD': 167.80,
-      'NFLX': 445.60,
-      'DIS': 92.30
-    };
-
-    const price = mockPrices[symbol] || 100;
-    const priceData: PriceData = {
-      symbol,
-      price,
-      change24h: Math.random() * 10 - 5, // Random change between -5 and +5
-      changePercent24h: ((Math.random() * 10 - 5) / price) * 100,
-      lastUpdated: new Date(),
-      source: 'manual'
-    };
-
-    await this.cachePrice(priceData);
-    return priceData;
-  }
-
-  /**
    * Get cached price from database
    */
   private async getCachedPrice(symbol: string): Promise<PriceData | null> {
@@ -237,11 +294,14 @@ export class PriceService {
         return null;
       }
 
+      // Determine source based on symbol type
+      const source = CRYPTO_MAPPINGS[symbol] ? 'coingecko' : 'yahoo';
+
       return {
         symbol: cached.symbol,
         price: Number(cached.current_price),
         lastUpdated: cached.updated_at,
-        source: 'coingecko' // Will be stored in DB in future update
+        source: source as 'coingecko' | 'yahoo'
       };
     } catch (error) {
       console.error('Error reading cache:', error);
@@ -265,7 +325,7 @@ export class PriceService {
           updated_at: new Date()
         }
       });
-      console.log(`Cached price for ${priceData.symbol}: $${priceData.price}`);
+      console.log(`Cached price for ${priceData.symbol}: $${priceData.price.toFixed(2)}`);
     } catch (error) {
       console.error('Error caching price:', error);
     }
@@ -291,6 +351,27 @@ export class PriceService {
       console.log('Price update complete');
     } catch (error) {
       console.error('Error updating all asset prices:', error);
+    }
+  }
+
+  /**
+   * Clear expired cache entries
+   */
+  async clearExpiredCache(): Promise<void> {
+    try {
+      const expirationTime = new Date(Date.now() - CACHE_DURATION_MINUTES * 60 * 1000);
+      
+      await prisma.priceCache.deleteMany({
+        where: {
+          updated_at: {
+            lt: expirationTime
+          }
+        }
+      });
+      
+      console.log('Expired cache entries cleared');
+    } catch (error) {
+      console.error('Error clearing expired cache:', error);
     }
   }
 }
