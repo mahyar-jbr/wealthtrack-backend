@@ -4,7 +4,6 @@ RESTful API backend for the WealthTrack personal wealth tracking application. Bu
 
 ## 🚀 Features
 
-### Implemented
 - ✅ **User Authentication**
   - User registration with password hashing (bcrypt)
   - JWT-based authentication
@@ -17,18 +16,23 @@ RESTful API backend for the WealthTrack personal wealth tracking application. Bu
   - Asset validation and error handling
   - User-specific asset isolation
 
+- ✅ **Real-time Price Fetching**
+  - Yahoo Finance integration for stock prices
+  - CoinGecko API for cryptocurrency prices
+  - Price caching to reduce API calls
+  - Automatic price updates
+
+- ✅ **Portfolio Analytics**
+  - Portfolio value calculation
+  - Gain/loss tracking
+  - Asset performance metrics
+  - Historical purchase data
+
 - ✅ **Database**
   - PostgreSQL with Prisma ORM
   - Secure password storage
   - Relational data model
   - Database migrations
-
-### Coming Soon
-- 📊 Real-time price fetching from external APIs
-- 📈 Portfolio analytics endpoints
-- 🔔 Price alerts system
-- 📱 WebSocket support for live updates
-- 🔐 Two-factor authentication
 
 ## 🛠 Tech Stack
 
@@ -38,6 +42,7 @@ RESTful API backend for the WealthTrack personal wealth tracking application. Bu
 - **Database**: PostgreSQL
 - **ORM**: Prisma
 - **Authentication**: JWT + bcrypt
+- **Price APIs**: Yahoo Finance, CoinGecko
 - **Deployment**: Railway
 - **Environment**: dotenv
 
@@ -46,21 +51,19 @@ RESTful API backend for the WealthTrack personal wealth tracking application. Bu
 - Node.js 16+
 - PostgreSQL 13+
 - npm or yarn
-- Railway account (for deployment)
+- Railway account (optional, for deployment)
 
 ## 🚀 Getting Started
 
 ### 1. Clone the repository
 ```bash
-git clone https://github.com/mahyar-jbr/wealthtrack-backend.git
+git clone https://github.com/yourusername/wealthtrack-backend.git
 cd wealthtrack-backend
 ```
 
 ### 2. Install dependencies
 ```bash
 npm install
-# or
-yarn install
 ```
 
 ### 3. Set up environment variables
@@ -84,16 +87,11 @@ npx prisma generate
 
 # Run migrations
 npx prisma migrate dev
-
-# (Optional) Seed the database
-npx prisma db seed
 ```
 
 ### 5. Start the development server
 ```bash
 npm run dev
-# or
-yarn dev
 ```
 
 The API will be available at `http://localhost:3000`
@@ -106,19 +104,21 @@ wealthtrack-backend/
 │   ├── routes/           # API route handlers
 │   │   ├── auth.ts      # Authentication routes
 │   │   ├── users.ts     # User routes
-│   │   └── assets.ts    # Asset management routes
+│   │   ├── assets.ts    # Asset management routes
+│   │   └── prices.ts    # Price fetching routes
 │   ├── middleware/      # Express middleware
 │   │   └── auth.ts      # JWT authentication middleware
 │   ├── services/        # Business logic services
-│   │   └── database.ts  # Prisma client instance
+│   │   ├── database.ts  # Prisma client instance
+│   │   └── prices.ts    # Price fetching service
 │   └── index.ts         # Application entry point
 ├── prisma/
 │   ├── schema.prisma    # Database schema
 │   └── migrations/      # Database migrations
-├── .env                 # Environment variables
-├── .env.example         # Environment variables example
-├── tsconfig.json        # TypeScript configuration
-└── package.json         # Dependencies and scripts
+├── .env                 # Environment variables (not in git)
+├── .gitignore          # Git ignore rules
+├── tsconfig.json       # TypeScript configuration
+└── package.json        # Dependencies and scripts
 ```
 
 ## 🔐 API Endpoints
@@ -143,6 +143,11 @@ wealthtrack-backend/
 | PUT | `/api/assets/:id` | Update asset | ✅ |
 | DELETE | `/api/assets/:id` | Delete asset | ✅ |
 
+### Prices
+| Method | Endpoint | Description | Auth Required |
+|--------|----------|-------------|---------------|
+| GET | `/api/prices/portfolio` | Get portfolio value with current prices | ✅ |
+
 ### Health Check
 | Method | Endpoint | Description | Auth Required |
 |--------|----------|-------------|---------------|
@@ -162,6 +167,8 @@ model User {
   created_at    DateTime @default(now())
   updated_at    DateTime @updatedAt
   assets        Asset[]
+
+  @@map("users")
 }
 ```
 
@@ -173,12 +180,25 @@ model Asset {
   type           AssetType
   symbol         String
   name           String
-  quantity       Decimal
-  purchase_price Decimal
+  quantity       Decimal   @db.Decimal(20, 8)
+  purchase_price Decimal   @db.Decimal(20, 2)
   purchase_date  DateTime
   created_at     DateTime  @default(now())
   updated_at     DateTime  @updatedAt
-  user           User      @relation(fields: [user_id], references: [id])
+  user           User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("assets")
+}
+```
+
+### Price Cache Model
+```prisma
+model PriceCache {
+  symbol        String   @id
+  current_price Decimal  @db.Decimal(20, 8)
+  updated_at    DateTime @default(now())
+
+  @@map("price_cache")
 }
 ```
 
@@ -226,49 +246,59 @@ curl -X GET http://localhost:3000/api/assets \
   -H "Authorization: Bearer YOUR_JWT_TOKEN"
 ```
 
-## 🚀 Deployment (Railway)
+## 💰 Price Fetching
 
-### 1. Install Railway CLI
+The API fetches real-time prices from:
+- **Yahoo Finance**: For stocks, ETFs
+- **CoinGecko**: For cryptocurrencies
+
+Prices are cached to minimize API calls and improve performance.
+
+## 🚀 Deployment
+
+### Railway (Recommended)
+
+1. Install Railway CLI:
 ```bash
 npm install -g @railway/cli
 ```
 
-### 2. Login to Railway
+2. Login and initialize:
 ```bash
 railway login
-```
-
-### 3. Initialize project
-```bash
 railway link
 ```
 
-### 4. Set environment variables
+3. Set environment variables:
 ```bash
 railway variables set JWT_SECRET="your-secret-key"
 railway variables set NODE_ENV="production"
 ```
 
-### 5. Deploy
+4. Deploy:
 ```bash
 railway up
 ```
 
 The database URL will be automatically configured by Railway.
 
-## 🧪 Testing
+## 🧪 Development
 
 ### Run Prisma Studio (Database GUI)
 ```bash
 npx prisma studio
 ```
 
+### Build for production
+```bash
+npm run build
+npm start
+```
+
 ### Test API Endpoints
-Use tools like:
 - [Postman](https://www.postman.com/)
 - [Insomnia](https://insomnia.rest/)
 - [Thunder Client](https://www.thunderclient.com/) (VS Code extension)
-- curl (command line)
 
 ## 🐛 Common Issues
 
@@ -288,33 +318,23 @@ npx prisma generate
 npx prisma migrate reset
 ```
 
-### Railway Deployment Issues
-```bash
-# Check logs
-railway logs
+## 📈 Performance & Security
 
-# Restart deployment
-railway up --detach
-```
-
-## 📈 Performance
-
-- Uses connection pooling for database
+- Database connection pooling
 - JWT tokens expire after 7 days
-- Passwords are hashed with bcrypt (10 rounds)
+- Passwords hashed with bcrypt (10 rounds)
 - CORS configured for production
+- Price caching with timestamps
+- SQL injection prevention via Prisma
 
 ## 🔗 Related Repositories
 
-- [Mobile App](https://github.com/mahyar-jbr/wealthtrack-mobile) - React Native mobile app
+- [WealthTrack Mobile](https://github.com/mahyar-jbr/wealthtrack-mobile) - React Native mobile app
 
-## 👥 Author
+## 📝 License
 
-**Mahyar Jbr**
-- GitHub: [@mahyar-jbr](https://github.com/mahyar-jbr)
+MIT
 
-## 🙏 Acknowledgments
+## 👨‍💻 Author
 
-- Express.js team
-- Prisma team for the excellent ORM
-- Railway for seamless deployment
+Built by Mahyar Jaberi

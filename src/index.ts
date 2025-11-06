@@ -10,13 +10,13 @@ import priceRoutes from './routes/prices';
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = parseInt(process.env.PORT || '3000', 10);
 
 // Middleware
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
+  origin: process.env.NODE_ENV === 'production'
     ? ['https://yourdomain.com'] // Replace with your frontend URL later
-    : ['http://localhost:3000', 'http://localhost:8081', 'http://localhost:19006'],
+    : true, // Allow all origins in development
   credentials: true
 }));
 
@@ -56,9 +56,9 @@ app.use((err: any, req: any, res: any, next: any) => {
   });
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📊 Health check: http://localhost:${PORT}/health`);
   console.log(`🔐 Auth endpoints: http://localhost:${PORT}/api/auth/*`);
-  console.log(`💰 Asset endpoints: http://localhost:${PORT}/api/assets/*`);  // ← ADD THIS LINE (optional but helpful)
+  console.log(`💰 Asset endpoints: http://localhost:${PORT}/api/assets/*`);
 });

@@ -1,8 +1,8 @@
 {
   "name": "wealthtrack-backend",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "RESTful API backend for WealthTrack personal wealth tracking application",
+  "main": "dist/index.js",
   "scripts": {
     "dev": "nodemon src/index.ts",
     "build": "tsc",
@@ -10,9 +10,17 @@
     "postinstall": "prisma generate",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "wealth-tracking",
+    "portfolio-management",
+    "finance",
+    "api",
+    "typescript",
+    "prisma",
+    "postgresql"
+  ],
+  "author": "Mahyar Jaberi",
+  "license": "MIT",
   "type": "commonjs",
   "dependencies": {
     "@prisma/client": "^6.16.1",
